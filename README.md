@@ -1,2 +1,1 @@
-# EazRemoveTrial
-Drag n Drop EXE
+Just Drag n Drop EXE
