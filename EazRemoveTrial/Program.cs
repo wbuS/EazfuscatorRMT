@@ -1,22 +1,18 @@
 ﻿using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 using dnlib.DotNet.Writer;
-using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
-using System.Linq;
 using Console = Colorful.Console;
 
 namespace EazRemoveTrial;
 
 internal class Program
 {
-    private static string _filepath;
+    private static string? _filepath;
 
     private static int _typeIndex = -1;
 
-    private static void Main(string[] args)
+    private static void Main(string?[] args)
     {
         Console.Title = "EazRemoveTrial";
 
@@ -33,7 +29,6 @@ internal class Program
                 Console.WriteLine("");
                 _typeIndex = 0;
             }
-
         }
         else if (args.Length == 1)
         {
