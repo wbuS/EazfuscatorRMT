@@ -5,183 +5,216 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using Console = Colorful.Console;
 
-namespace MaddoxXSoHappy
+namespace EazRemoveTrial;
+
+internal class Program
 {
-    internal class Program
+    private static string _filepath;
+
+    private static int _typeIndex = -1;
+
+    private static void Main(string[] args)
     {
-        private static String Filepath = null;
+        Console.Title = "EazRemoveTrial";
 
-        private static Int32 TypeIndex = -1;
-
-        private static void Main(String[] args)
-
+        if (args.Length < 1)
         {
-            Console.Title = "EazRemoveTrial";
-            if (args.Length < 1)
+            Console.Write("Exe Path: ");
+            _filepath = Console.ReadLine();
+            _filepath = _filepath.Replace("\"", "");
+            Console.Write("Index: ");
+            var index = Console.ReadLine();
+            if (!int.TryParse(index, out _typeIndex) || _typeIndex < 0)
             {
-                Console.WriteLine("Usage: EazUnlock <file> [index]");
-                Environment.Exit(1);
+                Console.WriteLine("Index Must Be A Non-Negative Integer, Using Default Of 0");
+                Console.WriteLine("");
+                _typeIndex = 0;
             }
 
-            Filepath = args[0];
-
-            if (args.Length > 1)
-            {
-                if (!Int32.TryParse(args[1], out TypeIndex) || TypeIndex < 0)
-                {
-                    Console.WriteLine("Index Must Be A Non-Negative Integer, Using Default Of 0");
-                    TypeIndex = 0;
-                }
-            }
-
-            Fix(Filepath);
         }
-
-        private static void Fix(String filepath)
+        else if (args.Length == 1)
         {
-            Fix(ModuleDefMD.Load(filepath));
+            _filepath = args[0];
+            _typeIndex = 0;
         }
-
-        private static void Fix(ModuleDefMD module)
+        else
         {
-            IList<TypeDef> evalTypes = FindEvaluationTypes(module);
-            if (evalTypes.Count == 0)
-            {
-                Console.WriteLine("Module Does Not Seem Limited By Eazfuscator.NET Evaluation", Color.Green);
-            }
-            else if (evalTypes.Count > 1)
-            {
-                Console.WriteLine("Multiple Evaluation-Like Types Detected : ");
-                foreach (var evalType in evalTypes)
-                    Console.WriteLine(" {0} (MDToken = 0x{1:X8})", evalType.FullName, evalType.MDToken.Raw);
+            _filepath = args[0];
 
-                if (TypeIndex < 0)
-                {
-                    TypeIndex = 0;
-                }
-                if (TypeIndex >= evalTypes.Count)
-                {
-                    Console.WriteLine("Type Index {0} Out-Of-Range, Using Default Of 0", TypeIndex);
-                    TypeIndex = 0;
-                }
-
-                Console.WriteLine("Patching Type At Index {0}", TypeIndex);
-                Patch(evalTypes[TypeIndex]);
-                Write(module);
-            }
-            else
+            if (!int.TryParse(args[1], out _typeIndex) || _typeIndex < 0)
             {
-                Console.WriteLine("Evaluation Type Found : (MDToken = 0x{1:X8})", Color.Green,
-                evalTypes[0].FullName, evalTypes[0].MDToken.Raw);
-                Patch(evalTypes[0]);
-                Write(module);
+                Console.WriteLine("Index Must Be A Non-Negative Integer, Using Default Of 0");
+                Console.WriteLine("");
+                _typeIndex = 0;
             }
         }
 
-        private static void Patch(TypeDef evalType)
+        try
         {
-            var badMethod = GetStaticMethods(evalType, "System.Boolean", "System.Boolean")[0];
-            var instructions = badMethod.Body.Instructions;
-            instructions.Clear();
-
-            instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());
-            instructions.Add(OpCodes.Ret.ToInstruction());
-
-            badMethod.Body.ExceptionHandlers.Clear();
-        }
-
-        private static IList<TypeDef> FindEvaluationTypes(ModuleDefMD module)
-        {
-            var evalTypes = new List<TypeDef>();
-
-            var types = module.GetTypes();
-            foreach (var typeDef in types)
+            if (string.IsNullOrWhiteSpace(_filepath) ||
+                !Path.GetExtension(_filepath).Equals(".exe", StringComparison.OrdinalIgnoreCase) ||
+                !Path.GetExtension(_filepath).Equals(".dll", StringComparison.OrdinalIgnoreCase))
             {
-                if (typeDef.Methods.Count == 4
-                && CountStaticMethods(typeDef, "System.Boolean", "System.Boolean") == 1
-                && CountStaticMethods(typeDef, "System.Void") == 2
-                && CountStaticMethods(typeDef, "System.Boolean") == 1)
-                    evalTypes.Add(typeDef);
-                else if (typeDef.Methods.Count == 3
-                && CountStaticMethods(typeDef, "System.Boolean", "System.Boolean") == 1
-                && CountStaticMethods(typeDef, "System.Void") == 1
-                && CountStaticMethods(typeDef, "System.Boolean") == 1)
-                    evalTypes.Add(typeDef);
+                throw new Exception("Enter a valid .exe or .dll path.");
+            }
+        }
+        catch
+        {
+            //
+        }
+        Fix(ModuleDefMD.Load(_filepath));
+    }
+
+    private static void Fix(ModuleDefMD module)
+    {
+        var evalTypes = FindEvaluationTypes(module);
+        if (evalTypes.Count == 0)
+        {
+            Console.WriteLine("Module Does Not Seem Limited By Eazfuscator.NET Evaluation", Color.Red);
+        }
+        else if (evalTypes.Count > 1)
+        {
+            Console.WriteLine("Multiple Evaluation-Like Types Detected : ");
+            foreach (var evalType in evalTypes)
+                Console.WriteLine($" {evalType.FullName} MDToken = 0x{evalType.MDToken.Raw:X8}");
+
+            if (_typeIndex < 0)
+            {
+                _typeIndex = 0;
+            }
+            if (_typeIndex >= evalTypes.Count)
+            {
+                Console.WriteLine($"Type Index {_typeIndex} Out-Of-Range, Using Default Of 0");
+                _typeIndex = 0;
             }
 
-            return evalTypes;
+            Console.WriteLine($"Patching Type At Index {_typeIndex}");
+            Patch(evalTypes[_typeIndex]);
+            Write(module);
         }
-
-        public static Int32 CountStaticMethods(TypeDef def, String retType, params String[] paramTypes)
+        else
         {
-            return GetStaticMethods(def, retType, paramTypes).Count;
+            Console.WriteLine($"Evaluation Type Found {evalTypes[0].FullName}: MDToken = 0x{evalTypes[0].MDToken.Raw:X8}", Color.Lime);
+            Patch(evalTypes[0]);
+            Write(module);
         }
+    }
 
-        public static IList<MethodDef> GetStaticMethods(TypeDef def, String retType, params String[] paramTypes)
+    private static void Patch(TypeDef evalType)
+    {
+        var badMethod = GetStaticMethods(evalType, "System.Boolean", "System.Boolean")[0];
+        var instructions = badMethod.Body.Instructions;
+        instructions.Clear();
+
+        instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());
+        instructions.Add(OpCodes.Ret.ToInstruction());
+
+        badMethod.Body.ExceptionHandlers.Clear();
+    }
+
+    private static IList<TypeDef> FindEvaluationTypes(ModuleDefMD module)
+    {
+        return module.GetTypes().Where(typeDef => IsConsole(typeDef) || IsWinForm(typeDef)).ToList();
+    }
+
+    private static bool IsConsole(TypeDef typeDef)
+    {
+        return typeDef.Methods.Count switch
         {
-            List<MethodDef> methods = new List<MethodDef>();
+            4 when CountStaticMethods(typeDef, "System.Boolean", "System.Boolean") == 1 &&
+                   CountStaticMethods(typeDef, "System.Void") == 2 &&
+                   CountStaticMethods(typeDef, "System.Boolean") == 1 => true,
+            3 when CountStaticMethods(typeDef, "System.Boolean", "System.Boolean") == 1 &&
+                   CountStaticMethods(typeDef, "System.Void") == 1 &&
+                   CountStaticMethods(typeDef, "System.Boolean") == 1 => true,
+            _ => false
+        };
+    }
 
-            if (!def.HasMethods)
-                return methods;
+    private static bool IsWinForm(TypeDef typeDef)
+    {
+        return typeDef.Methods.Count switch
+        {
+            6 when CountStaticMethods(typeDef, "System.Boolean", "System.Boolean") == 2 &&
+                   CountStaticMethods(typeDef, "System.Void", "System.Threading.ThreadStart") == 1 &&
+                   CountStaticMethods(typeDef, "System.Void") == 2 &&
+                   CountStaticMethods(typeDef, "System.Boolean") == 1 => true,
+            _ => false
+        };
+    }
 
-            foreach (var method in def.Methods)
-            {
-                if (!method.IsStatic)
-                    continue;
+    private static int CountStaticMethods(TypeDef def, string retType, params string[] paramTypes)
+    {
+        return GetStaticMethods(def, retType, paramTypes).Count;
+    }
 
-                if (!method.ReturnType.FullName.Equals(retType))
-                    continue;
+    private static IList<MethodDef> GetStaticMethods(TypeDef def, string retType, params string[] paramTypes)
+    {
+        var methods = new List<MethodDef>();
 
-                if (paramTypes.Length != method.Parameters.Count)
-                    continue;
-
-                Boolean paramsMatch = true;
-                for (Int32 i = 0; i < paramTypes.Length && i < method.Parameters.Count; i++)
-                {
-                    if (!method.Parameters[i].Type.FullName.Equals(paramTypes[i]))
-                    {
-                        paramsMatch = false;
-                        break;
-                    }
-                }
-
-                if (!paramsMatch)
-                    continue;
-
-                methods.Add(method);
-            }
-
+        if (!def.HasMethods)
             return methods;
-        }
 
-        private static void Write(ModuleDefMD module)
+        foreach (var method in def.Methods)
         {
-            Console.WriteLine("");
-            String outputPath = GetOutputFilepath();
-            Console.WriteLine("Saving {0}", outputPath, Color.Green);
+            if (!method.IsStatic)
+                continue;
 
-            var options = new ModuleWriterOptions(module);
-            options.MetadataOptions.Flags |= MetaDataFlags.PreserveAll;
-            options.MetadataOptions.Flags |= MetaDataFlags.KeepOldMaxStack;
-            module.Write(outputPath, options);
-            Console.ReadKey();
+            if (!method.ReturnType.FullName.Equals(retType))
+                continue;
+
+            if (paramTypes.Length != method.Parameters.Count)
+                continue;
+
+            var paramsMatch = true;
+            for (var i = 0; i < paramTypes.Length && i < method.Parameters.Count; i++)
+            {
+                if (!method.Parameters[i].Type.FullName.Equals(paramTypes[i]))
+                {
+                    paramsMatch = false;
+                    break;
+                }
+            }
+
+            if (!paramsMatch)
+                continue;
+
+            methods.Add(method);
         }
 
-        private static String GetOutputFilepath()
-        {
-            String dir = Path.GetDirectoryName(Filepath);
-            String noExt = Path.GetFileNameWithoutExtension(Filepath);
-            String ext = Path.GetExtension(Filepath);
-            String newFilename = String.Format("{0}-Removed{1}", noExt, ext);
-            return Path.Combine(dir, newFilename);
-        }
+        return methods;
     }
 
-    internal class MetaDataFlags
+    private static void Write(ModuleDefMD module)
     {
-        internal static MetadataFlags KeepOldMaxStack;
-        internal static MetadataFlags PreserveAll;
+        Console.WriteLine("");
+        var outputPath = GetOutputFilepath();
+        Console.WriteLine("Saving {0}", outputPath, Color.DodgerBlue);
+
+        var options = new ModuleWriterOptions(module);
+        options.MetadataOptions.Flags |= MetaDataFlags.PreserveAll;
+        options.MetadataOptions.Flags |= MetaDataFlags.KeepOldMaxStack;
+        module.Write(outputPath, options);
+        Console.WriteLine("");
+        Console.Write("Press any key to exit...");
+        Console.ReadKey();
     }
+
+    private static string GetOutputFilepath()
+    {
+        var dir = Path.GetDirectoryName(_filepath);
+        var noExt = Path.GetFileNameWithoutExtension(_filepath);
+        var ext = Path.GetExtension(_filepath);
+        var newFilename = $"{noExt}-Removed{ext}";
+        return Path.Combine(dir, newFilename);
+    }
+}
+
+internal class MetaDataFlags
+{
+    internal static MetadataFlags KeepOldMaxStack;
+    internal static MetadataFlags PreserveAll;
 }
